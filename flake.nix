@@ -17,11 +17,14 @@
     }@inputs:
     {
       overlays.default = import ./overlay.nix inputs;
+      packages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system: {
+        default = self.legacyPackages.${system}.pkgsCross.aarch64-multiplatform.rpi5-uefi.fd;
+      });
       legacyPackages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (
         system:
         import nixpkgs {
           inherit system;
-          overlays = [ (import ./overlay.nix inputs) ];
+          overlays = [ self.overlays.default ];
           config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "RPI_EFI";
         }
       );
