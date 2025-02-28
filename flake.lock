@@ -1,0 +1,80 @@
+{
+  "nodes": {
+    "atf-rpi5": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1732141824,
+        "narHash": "sha256-PCUKLfmvIBiJqVmKSUKkNig1h44+4RypZ04BvJ+HP6M=",
+        "owner": "ARM-software",
+        "repo": "arm-trusted-firmware",
+        "rev": "4ec2948fe3f65dba2f19e691e702f7de2949179c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ARM-software",
+        "ref": "v2.12.0",
+        "repo": "arm-trusted-firmware",
+        "type": "github"
+      }
+    },
+    "edk2-non-osi": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1739320765,
+        "narHash": "sha256-gQY4lQGy9mIQOk+IqzFW31vM7S9K1TRVLjZ6iFVGgXs=",
+        "owner": "tianocore",
+        "repo": "edk2-non-osi",
+        "rev": "ea2040c2d4e2200557e87b9f9fbd4f8fb7a2b6e8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tianocore",
+        "repo": "edk2-non-osi",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1739580444,
+        "narHash": "sha256-+/bSz4EAVbqz8/HsIGLroF8aNaO8bLRL7WfACN+24g4=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8bb37161a0488b89830168b81c48aed11569cb93",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "atf-rpi5": "atf-rpi5",
+        "edk2-non-osi": "edk2-non-osi",
+        "nixpkgs": "nixpkgs",
+        "rpi5-edk2-platforms": "rpi5-edk2-platforms"
+      }
+    },
+    "rpi5-edk2-platforms": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1739848577,
+        "narHash": "sha256-9XqPj45sheo/L1ADaDt7NNAfcTYh7MQ4LMzvfXLxAb0=",
+        "owner": "ElvishJerricco",
+        "repo": "edk2-platforms",
+        "rev": "7cbb4478946c8162d243eb2bbfa751cfb49df24e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ElvishJerricco",
+        "ref": "rpi5-dev",
+        "repo": "edk2-platforms",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

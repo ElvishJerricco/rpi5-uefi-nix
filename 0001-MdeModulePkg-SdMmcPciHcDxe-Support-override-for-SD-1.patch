@@ -1,0 +1,252 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Mario=20B=C4=83l=C4=83nic=C4=83?=
+ <mariobalanica02@gmail.com>
+Date: Thu, 28 Dec 2023 23:58:19 +0200
+Subject: [PATCH] MdeModulePkg/SdMmcPciHcDxe: Support override for SD 1.8v
+ signaling switch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some platforms (e.g. Raspberry Pi) have SDHCI implementations where the
+internal signaling voltage control isn't wired up and therefore needs to
+be set externally, in a non-standard way.
+
+Power cycling the card to get it out of 1.8V is also kind of necessary,
+but for now it can be done in the Reset/InitHost phase override.
+
+Signed-off-by: Mario Bălănică <mariobalanica02@gmail.com>
+---
+ MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdDevice.c | 32 ++++----
+ .../Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.c       | 77 +++++++++++++++++++
+ .../Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.h       | 20 +++++
+ MdeModulePkg/Include/Protocol/SdMmcOverride.h | 10 ++-
+ 4 files changed, 124 insertions(+), 15 deletions(-)
+
+diff --git a/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdDevice.c b/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdDevice.c
+index 8bf452e9d0..acb98c4a6a 100644
+--- a/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdDevice.c
++++ b/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdDevice.c
+@@ -1215,6 +1215,7 @@ SdCardIdentification (
+   EFI_STATUS                     Status;
+   EFI_PCI_IO_PROTOCOL            *PciIo;
+   EFI_SD_MMC_PASS_THRU_PROTOCOL  *PassThru;
++  EFI_HANDLE                     ControllerHandle;
+   UINT32                         Ocr;
+   UINT16                         Rca;
+   BOOLEAN                        Xpc;
+@@ -1223,7 +1224,6 @@ SdCardIdentification (
+   UINT16                         ControllerVer;
+   UINT8                          PowerCtrl;
+   UINT32                         PresentState;
+-  UINT8                          HostCtrl2;
+   UINTN                          Retry;
+   BOOLEAN                        ForceVoltage33;
+   BOOLEAN                        SdVersion1;
+@@ -1231,10 +1231,22 @@ SdCardIdentification (
+   ForceVoltage33 = FALSE;
+   SdVersion1     = FALSE;
+ 
+-  PciIo    = Private->PciIo;
+-  PassThru = &Private->PassThru;
++  PciIo            = Private->PciIo;
++  PassThru         = &Private->PassThru;
++  ControllerHandle = Private->ControllerHandle;
+ 
+ Voltage33Retry:
++  //
++  // Start at 3.3V.
++  // Note that if we got here from a failed 1.8V switching attempt,
++  // the card should've been power cycled to reset its own voltage level.
++  //
++  Status = SdMmcHcSetSignalingVoltage (ControllerHandle, PciIo, Slot, SdMmcSignalingVoltage33);
++  if (EFI_ERROR (Status)) {
++    DEBUG ((DEBUG_ERROR, "SdCardIdentification: Couldn't set 3.3V signaling: %r\n", Status));
++    return Status;
++  }
++
+   //
+   // 1. Send Cmd0 to the device
+   //
+@@ -1371,16 +1383,10 @@ Voltage33Retry:
+         goto Error;
+       }
+ 
+-      HostCtrl2 = BIT3;
+-      SdMmcHcOrMmio (PciIo, Slot, SD_MMC_HC_HOST_CTRL2, sizeof (HostCtrl2), &HostCtrl2);
+-
+-      gBS->Stall (5000);
+-
+-      SdMmcHcRwMmio (PciIo, Slot, SD_MMC_HC_HOST_CTRL2, TRUE, sizeof (HostCtrl2), &HostCtrl2);
+-      if ((HostCtrl2 & BIT3) == 0) {
+-        DEBUG ((DEBUG_ERROR, "SdCardIdentification: SwitchVoltage fails with HostCtrl2 = 0x%x\n", HostCtrl2));
+-        Status = EFI_DEVICE_ERROR;
+-        goto Error;
++      Status = SdMmcHcSetSignalingVoltage (ControllerHandle, PciIo, Slot, SdMmcSignalingVoltage18);
++      if (EFI_ERROR (Status)) {
++        DEBUG ((DEBUG_ERROR, "SdCardIdentification: Couldn't set 1.8V signaling: %r\n", Status));
++        return Status;
+       }
+ 
+       Status = SdMmcHcStartSdClock (PciIo, Slot);
+diff --git a/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.c b/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.c
+index 2e7497a89d..26cada645b 100644
+--- a/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.c
++++ b/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.c
+@@ -1171,6 +1171,83 @@ SdMmcHcInitPowerVoltage (
+   return Status;
+ }
+ 
++/**
++  Set the voltage regulator for I/O signaling.
++
++  @param[in] PciIo          The PCI IO protocol instance.
++  @param[in] Slot           The slot number of the SD card to send the command to.
++  @param[in] Voltage        The signaling voltage.
++
++  @retval EFI_SUCCESS       The voltage is supplied successfully.
++  @retval Others            The voltage isn't supplied successfully.
++
++**/
++EFI_STATUS
++SdMmcHcSetSignalingVoltage (
++  IN EFI_HANDLE                ControllerHandle,
++  IN EFI_PCI_IO_PROTOCOL       *PciIo,
++  IN UINT8                     Slot,
++  IN SD_MMC_SIGNALING_VOLTAGE  Voltage
++  )
++{
++  EFI_STATUS  Status;
++  UINT8       HostCtrl2;
++
++  //
++  // Set the internal regulator first.
++  //
++  switch (Voltage) {
++    case SdMmcSignalingVoltage33:
++      HostCtrl2 = ~SD_MMC_HC_CTRL_1V8_SIGNAL;
++      SdMmcHcAndMmio (PciIo, Slot, SD_MMC_HC_HOST_CTRL2, sizeof (HostCtrl2), &HostCtrl2);
++      break;
++    case SdMmcSignalingVoltage18:
++      HostCtrl2 = SD_MMC_HC_CTRL_1V8_SIGNAL;
++      SdMmcHcOrMmio (PciIo, Slot, SD_MMC_HC_HOST_CTRL2, sizeof (HostCtrl2), &HostCtrl2);
++      break;
++    default:
++      ASSERT (FALSE);
++      return EFI_INVALID_PARAMETER;
++  }
++
++  //
++  // Some controllers rely on an external regulator.
++  //
++  if ((mOverride != NULL) && (mOverride->NotifyPhase != NULL)) {
++    Status = mOverride->NotifyPhase (
++                          ControllerHandle,
++                          Slot,
++                          EdkiiSdMmcSetSignalingVoltage,
++                          &Voltage
++                          );
++    if (EFI_ERROR (Status)) {
++      DEBUG ((
++        DEBUG_ERROR,
++        "%a: SD/MMC set signaling voltage notifier callback failed - %r\n",
++        __func__,
++        Status
++        ));
++      return Status;
++    }
++  }
++
++  gBS->Stall (5000);
++
++  Status = SdMmcHcRwMmio (PciIo, Slot, SD_MMC_HC_HOST_CTRL2, TRUE, sizeof (HostCtrl2), &HostCtrl2);
++  if (EFI_ERROR (Status)) {
++    return Status;
++  }
++
++  HostCtrl2 &= SD_MMC_HC_CTRL_1V8_SIGNAL;
++  if (((Voltage == SdMmcSignalingVoltage33) && (HostCtrl2 != 0)) ||
++      ((Voltage == SdMmcSignalingVoltage18) && (HostCtrl2 == 0)))
++  {
++    return EFI_DEVICE_ERROR;
++  }
++
++  return EFI_SUCCESS;
++}
++
+ /**
+   Initialize the Timeout Control register with most conservative value at initialization.
+ 
+diff --git a/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.h b/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.h
+index 91155770e0..e3df7ed9a5 100644
+--- a/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.h
++++ b/MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHci.h
+@@ -60,6 +60,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
+ //
+ // SD Host Controller bits to HOST_CTRL2 register
+ //
++#define SD_MMC_HC_CTRL_1V8_SIGNAL  0x0008
+ #define SD_MMC_HC_CTRL_UHS_MASK    0x0007
+ #define SD_MMC_HC_CTRL_UHS_SDR12   0x0000
+ #define SD_MMC_HC_CTRL_UHS_SDR25   0x0001
+@@ -553,6 +554,25 @@ SdMmcHcInitPowerVoltage (
+   IN SD_MMC_HC_SLOT_CAP   Capability
+   );
+ 
++/**
++  Set the voltage regulator for I/O signaling.
++
++  @param[in] PciIo          The PCI IO protocol instance.
++  @param[in] Slot           The slot number of the SD card to send the command to.
++  @param[in] Voltage        The signaling voltage.
++
++  @retval EFI_SUCCESS       The voltage is supplied successfully.
++  @retval Others            The voltage isn't supplied successfully.
++
++**/
++EFI_STATUS
++SdMmcHcSetSignalingVoltage (
++  IN EFI_HANDLE                ControllerHandle,
++  IN EFI_PCI_IO_PROTOCOL       *PciIo,
++  IN UINT8                     Slot,
++  IN SD_MMC_SIGNALING_VOLTAGE  Voltage
++  );
++
+ /**
+   Initialize the Timeout Control register with most conservative value at initialization.
+ 
+diff --git a/MdeModulePkg/Include/Protocol/SdMmcOverride.h b/MdeModulePkg/Include/Protocol/SdMmcOverride.h
+index 4fd12b9ad4..d611bb04d8 100644
+--- a/MdeModulePkg/Include/Protocol/SdMmcOverride.h
++++ b/MdeModulePkg/Include/Protocol/SdMmcOverride.h
+@@ -16,7 +16,7 @@
+ #define EDKII_SD_MMC_OVERRIDE_PROTOCOL_GUID \
+   { 0xeaf9e3c1, 0xc9cd, 0x46db, { 0xa5, 0xe5, 0x5a, 0x12, 0x4c, 0x83, 0x23, 0x23 } }
+ 
+-#define EDKII_SD_MMC_OVERRIDE_PROTOCOL_VERSION  0x3
++#define EDKII_SD_MMC_OVERRIDE_PROTOCOL_VERSION  0x4
+ 
+ typedef struct _EDKII_SD_MMC_OVERRIDE EDKII_SD_MMC_OVERRIDE;
+ 
+@@ -83,6 +83,11 @@ typedef enum {
+   SdMmcMmcHs400,
+ } SD_MMC_BUS_MODE;
+ 
++typedef enum {
++  SdMmcSignalingVoltage33,
++  SdMmcSignalingVoltage18
++} SD_MMC_SIGNALING_VOLTAGE;
++
+ typedef enum {
+   EdkiiSdMmcResetPre,
+   EdkiiSdMmcResetPost,
+@@ -90,7 +95,8 @@ typedef enum {
+   EdkiiSdMmcInitHostPost,
+   EdkiiSdMmcUhsSignaling,
+   EdkiiSdMmcSwitchClockFreqPost,
+-  EdkiiSdMmcGetOperatingParam
++  EdkiiSdMmcGetOperatingParam,
++  EdkiiSdMmcSetSignalingVoltage
+ } EDKII_SD_MMC_PHASE_TYPE;
+ 
+ /**
