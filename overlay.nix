@@ -16,4 +16,5 @@ inputs: final: prev: {
   };
   inherit (inputs) rpi5-edk2-platforms edk2-non-osi;
   rpi5-uefi = final.callPackage ./package.nix { };
+  boot_folder = final.callPackage ./boot_folder.nix {};
 }
