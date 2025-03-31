@@ -1,22 +1,5 @@
 {
   "nodes": {
-    "atf-rpi5": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1732141824,
-        "narHash": "sha256-PCUKLfmvIBiJqVmKSUKkNig1h44+4RypZ04BvJ+HP6M=",
-        "owner": "ARM-software",
-        "repo": "arm-trusted-firmware",
-        "rev": "4ec2948fe3f65dba2f19e691e702f7de2949179c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ARM-software",
-        "ref": "v2.12.0",
-        "repo": "arm-trusted-firmware",
-        "type": "github"
-      }
-    },
     "edk2-non-osi": {
       "flake": false,
       "locked": {
@@ -51,7 +34,6 @@
     },
     "root": {
       "inputs": {
-        "atf-rpi5": "atf-rpi5",
         "edk2-non-osi": "edk2-non-osi",
         "nixpkgs": "nixpkgs",
         "rpi5-edk2-platforms": "rpi5-edk2-platforms"

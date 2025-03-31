@@ -3,8 +3,6 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rpi5-edk2-platforms.url = "github:ElvishJerricco/edk2-platforms/rpi5-dev";
     rpi5-edk2-platforms.flake = false;
-    atf-rpi5.url = "github:ARM-software/arm-trusted-firmware/v2.12.0";
-    atf-rpi5.flake = false;
     edk2-non-osi.url = "github:tianocore/edk2-non-osi";
     edk2-non-osi.flake = false;
   };

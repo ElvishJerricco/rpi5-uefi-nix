@@ -6,11 +6,7 @@ inputs: final: prev: {
       "RPI3_PRELOADED_DTB_BASE=0x1F0000"
       "SUPPORT_VFP=1"
       "SMC_PCI_SUPPORT=1"
-      "AS=$(CC)"
-      "OC=$(OBJCOPY)"
-      "OD=$(OBJDUMP)"
     ];
-    src = inputs.atf-rpi5;
     filesToInstall = [ "build/rpi5/release/bl31.bin" ];
     nativeBuildInputs = [ ];
   };
