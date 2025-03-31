@@ -16,6 +16,23 @@
         "type": "github"
       }
     },
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1695612854,
+        "narHash": "sha256-QPe1fENhAB4l/N04FulgItq1rfcpQMttGZzikV7h3iI=",
+        "owner": "ElvishJerricco",
+        "repo": "flake-compat",
+        "rev": "ad8d6af6aa8a14851a60bd00927f42b9798544ea",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ElvishJerricco",
+        "ref": "add-overrideInputs",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1743315132,
@@ -35,6 +52,7 @@
     "root": {
       "inputs": {
         "edk2-non-osi": "edk2-non-osi",
+        "flake-compat": "flake-compat",
         "nixpkgs": "nixpkgs",
         "rpi5-edk2-platforms": "rpi5-edk2-platforms"
       }

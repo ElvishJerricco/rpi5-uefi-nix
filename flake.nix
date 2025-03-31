@@ -1,5 +1,7 @@
 {
   inputs = {
+    flake-compat.url = "github:ElvishJerricco/flake-compat/add-overrideInputs";
+    flake-compat.flake = false;
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rpi5-edk2-platforms.url = "github:ElvishJerricco/edk2-platforms/rpi5-dev";
     rpi5-edk2-platforms.flake = false;
@@ -28,5 +30,6 @@
           config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "RPI_EFI";
         }
       );
+      hydraJobs = self.packages.x86_64-linux;
     };
 }
